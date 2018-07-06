@@ -1,2 +1,6 @@
 /weights.npy
 /__pycache__
+/networks
+/camera/states
+/camera/other
+/camera/data.h5
