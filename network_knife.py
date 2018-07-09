@@ -150,6 +150,8 @@ def test_network_knife(model, network_file_path, imagefiles):
 	# calculate the actions for each mask
 	# create a list with an inner list for each image
 	new_action_array = [] # actions for each mask after it's applied
+	for image_idx in range(len(old_action_arrayss)):
+				new_action_array.append([])
 
 	all_differences = []
 	# calculate each new action, then save in the arrays
@@ -159,10 +161,6 @@ def test_network_knife(model, network_file_path, imagefiles):
 
 		model.set_weights(new_weights)
 		new_actions = test_network(model, imagefiles)
-
-		if len(new_action_array) == 0:
-			for image_idx in range(len(new_actions)):
-				new_action_array.append([])
 
 		differences = []
 		for image_idx, new in enumerate(new_actions):
