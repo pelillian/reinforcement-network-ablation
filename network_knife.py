@@ -135,16 +135,14 @@ def plot_actions(pdf, actions, colors, action_max, title, zero_index=True):
 	pdf.savefig()
 	plt.clf()
 
-
 def test_network_knife(model, network_file_path, imagefiles):
 
 	model.load_weights(network_file_path)
 
 	original_weights = np.copy(model.get_weights())
-	# np.save('weights.npy', original_weights)
 
+	# test the network on the unmodified model as a baseline for comparison
 	old_action_array = test_network(model, imagefiles)
-	# print('Original Actions:', old_action_array)
 
 	# for each group of neurons, create a mask dropping out that group
 	mask_list = get_masks(original_weights)
@@ -152,7 +150,6 @@ def test_network_knife(model, network_file_path, imagefiles):
 	# calculate the actions for each mask
 	# create a list with an inner list for each image
 	new_action_array = [] # actions for each mask after it's applied
-	
 
 	all_differences = []
 	# calculate each new action, then save in the arrays
@@ -176,79 +173,12 @@ def test_network_knife(model, network_file_path, imagefiles):
 	trial_avg_differences = np.mean(all_differences, axis=1)
 	action_max = np.max(np.abs(np.array(all_differences)))
 
-	# visualize the new actions compared to the old
-	# with PdfPages(re.sub('\..+', '.pdf', network_file_path)) as pdf:
-
-	# 	plot_actions(pdf, trial_avg_differences, trial_avg_differences, action_max, "Average Differences", zero_index=False)
-
-	# 	for image_idx, image_filename in enumerate(imagefiles):
-
-	# 		old_action = old_action_array[image_idx]
-	# 		new_actions = new_action_array[image_idx]
-
-	# 		# calculate the norm between each new action and the old action for coloring
-	# 		differences = [[0, 0, 0]]
-	# 		for new in new_actions:
-	# 			differences.append(new - old_action)
-
-	# 		actions = np.array([old_action] + new_actions)
-	# 		colors = np.array(differences)
-
-	# 		plot_actions(pdf, actions, colors, action_max, "Image " + str(image_idx + 1))
-	# 		plot_actions(pdf, colors, colors, action_max, "Image " + str(image_idx + 1) + " Differences")
-
 	# for the entire trial, we've calculated the differences between the unmodified network and the network with different parts cut out.
 	# we return the differences averaged over all of the input images
 	return trial_avg_differences
 		
 def match_data(trials, avg_differences):
 	# match up each group of neurons with a similar function
-	both_differences = []
-	trial_diff_sums = []
-	pca_outputs = []
-	with PdfPages("avg_differences.pdf") as pdf:
-		for trial_num, trial_avg_differences in zip(trials, avg_differences):
-			# remove first column
-			trial_avg_differences = np.delete(trial_avg_differences, 0, axis=1)
-
-			# plot diff sum
-			trial_diff_sum = np.sum(trial_avg_differences, axis=1)
-
-			ax = plt.subplot(111)
-			ax.bar(np.arange(len(trial_diff_sum)) + 1, trial_diff_sum, PLOT_WIDTH)
-
-			plt.title(FILENAME_PATTERN + str(trial_num) + ' difference sum')
-			pdf.savefig()
-			plt.clf()
-
-			# plot pca
-			pca = PCA(n_components=1)
-			output = pca.fit_transform(trial_avg_differences)
-
-			# make sure pca has the same sign
-			for diff, p in zip(trial_diff_sum, output):
-				if (diff > 0 and p < 0 and diff - p > np.max(trial_diff_sum)) or (diff < 0 and p > 0 and p - diff > np.max(trial_diff_sum)):
-					output *= -1
-					continue
-
-
-			ax = plt.subplot(111)
-			ax.bar(np.arange(len(output)) + 1, output, PLOT_WIDTH)
-
-			plt.title(FILENAME_PATTERN + str(trial_num) + ' PCA')
-			pdf.savefig()
-			plt.clf()
-
-			# sort by pca for later plotting
-			data = np.column_stack((trial_diff_sum, output))
-			data = data[data[:,1].argsort()]
-			trial_diff_sum = data[:,0]
-			output = data[:,1]
-
-			both_differences.append(trial_avg_differences[:, 0])
-			both_differences.append(trial_avg_differences[:, 1])
-			trial_diff_sums.append(trial_diff_sum)
-			pca_outputs.append(output)
 
 	with PdfPages("final_graph.pdf") as pdf:
 		data = np.column_stack(tuple(both_differences))
