@@ -214,12 +214,9 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 	return np.array(trial_results)
 		
 def match_data(trials, trial_results_arr):
-	# trial_results_arr is a python list of numpy arrays. We have to flatten them so they can be treated as features
-	for i, trial_results in enumerate(trial_results_arr):
-		print(trial_results.shape)
-		trial_results_arr[i] = trial_results.flatten().tolist()
-
-	trial_results_arr = np.array(trial_results_arr)
+	# We have to flatten the last two dimensions so they can be treated as features
+	trial_results_arr = np.array(trial_results_arr).reshape(5, 10, 6)
+	
 	
 
 if __name__ == "__main__":
