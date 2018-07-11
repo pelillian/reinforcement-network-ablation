@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 import numpy as np
+from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
 
 if len(sys.argv) < 2 or '-s' not in sys.argv:
@@ -217,7 +218,15 @@ def match_data(trials, trial_results_arr):
 	# We have to flatten the last two dimensions so they can be treated as features
 	trial_results_arr = np.array(trial_results_arr).reshape(5, 10, 6)
 	
-	
+	# pca = PCA()
+	# pca.fit(trial_results_arr.reshape(50, 6))
+	# print(pca.explained_variance_ratio_.cumsum())
+	trial_results_reshaped = trial_results_arr.reshape(50, 6)
+	print(trial_results_reshaped[0])
+	distances = cdist(trial_results_reshaped, trial_results_reshaped, 'euclidean')
+	# for trial_idx, trial_num in enumerate(trials): # idx is the trial position in the list, num is the number given by the folder name
+	# 	trial_results = trial_results_arr[trial_idx]
+
 
 if __name__ == "__main__":
 
