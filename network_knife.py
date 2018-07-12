@@ -6,6 +6,7 @@ import re
 import pickle as pkl
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.backends.backend_pdf import PdfPages
 
 import numpy as np
@@ -187,7 +188,8 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 			# remove the 'forward' action, just focusing on the turns
 			differences = np.array(differences)[:, 1:]
 			# calculate the mean across all the images (in the group)
-			trial_results[mask_num][imgtype_num] = np.mean(differences, axis=0).tolist()
+			# trial_results[mask_num][imgtype_num] = np.mean(differences, axis=0).tolist()
+			trial_results[mask_num][imgtype_num] = differences.tolist()
 			all_differences.append(differences)
 
 	action_max = np.max(np.abs(np.array(all_differences)))
@@ -216,14 +218,27 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 		
 def match_data(trials, trial_results_arr):
 	# We have to flatten the last two dimensions so they can be treated as features
-	trial_results_arr = np.array(trial_results_arr).reshape(5, 10, 6)
+	trial_results_arr = np.array(trial_results_arr).reshape(5, 10, 48)
+	trial_results_reshaped = trial_results_arr.reshape(50, 48)
+
+	colors = np.zeros((5, 10))
+	for i in range(5):
+		colors[i, :] = i
+	colors = colors.reshape(50,)
 	
-	# pca = PCA()
-	# pca.fit(trial_results_arr.reshape(50, 6))
-	# print(pca.explained_variance_ratio_.cumsum())
-	trial_results_reshaped = trial_results_arr.reshape(50, 6)
-	print(trial_results_reshaped[0])
-	distances = cdist(trial_results_reshaped, trial_results_reshaped, 'euclidean')
+	pca = PCA()
+	x = pca.fit_transform(trial_results_reshaped)
+	print(pca.explained_variance_ratio_.cumsum())
+
+	fig = plt.figure(1, figsize=(4, 3))
+	plt.clf()
+	ax = Axes3D(fig, rect=[0, 0, .95, 1], elev=48, azim=134)
+	ax.scatter(x[:, 0], x[:, 1], x[:, 2], c=colors)
+
+	plt.show()
+
+	# print(trial_results_reshaped[0])
+	# distances = cdist(trial_results_reshaped, trial_results_reshaped, 'euclidean')
 	# for trial_idx, trial_num in enumerate(trials): # idx is the trial position in the list, num is the number given by the folder name
 	# 	trial_results = trial_results_arr[trial_idx]
 
