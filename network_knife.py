@@ -11,7 +11,10 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import numpy as np
 from scipy.spatial.distance import cdist
+
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 
 if len(sys.argv) < 2 or '-s' not in sys.argv:
 	from imageio import imread
@@ -27,6 +30,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 ACTIONS = 3
 STATE_DIMENSIONS = (40, 40, 3)
+
+NUM_SLICES = 10
 
 PLOT_WIDTH = 0.25
 FILENAME_PATTERN = 'actor_trial_'
@@ -85,20 +90,21 @@ def get_masks(original_weights):
 	mask_list = []
 
 	# for each group of neurons, create a mask dropping out that group
-	for n in range(10):
+	SLICE_SIZE = 100 // NUM_SLICES
+	for n in range(NUM_SLICES):
 		mask_ = []
 		for layer in original_weights:
 			if layer.shape == (200, 100):
 				# set weights to zero
 				layer = np.ones_like(layer)
-				n_ = n*10
-				layer[:, n_:(n_ + 10)] = 0
+				n_ = n*SLICE_SIZE
+				layer[:, n_:(n_ + SLICE_SIZE)] = 0
 				mask_.append(layer)
 			elif layer.shape == (100,):
 				# set biases to zero
 				layer = np.ones_like(layer)
-				n_ = n*10
-				layer[n_:(n_ + 10)] = 0
+				n_ = n*SLICE_SIZE
+				layer[n_:(n_ + SLICE_SIZE)] = 0
 				mask_.append(layer)
 			else:
 				mask_.append(np.ones_like(layer))
@@ -210,38 +216,91 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 			colors = np.array(differences)
 
 			plot_actions(pdf, actions, colors, action_max, "Image " + str(image_idx + 1) + " (" + imagetypes_list[image_idx] + ")")
-			# plot_actions(pdf, colors, colors, action_max, "Image " + str(image_idx + 1) + " Differences")
+			plot_actions(pdf, colors, colors, action_max, "Image " + str(image_idx + 1) + " Differences")
 
 	# for the entire trial, we've calculated the differences between the unmodified network and each network with different parts cut out.
 	# trial_results is the differences averaged over all of the input images in each group
 	return np.array(trial_results)
 		
-def match_data(trials, trial_results_arr):
-	# We have to flatten the last two dimensions so they can be treated as features
-	trial_results_arr = np.array(trial_results_arr).reshape(5, 10, 48)
-	trial_results_reshaped = trial_results_arr.reshape(50, 48)
-
-	colors = np.zeros((5, 10))
-	for i in range(5):
-		colors[i, :] = i
-	colors = colors.reshape(50,)
-	
-	pca = PCA()
-	x = pca.fit_transform(trial_results_reshaped)
-	print(pca.explained_variance_ratio_.cumsum())
-
-	fig = plt.figure(1, figsize=(4, 3))
-	plt.clf()
-	ax = Axes3D(fig, rect=[0, 0, .95, 1], elev=48, azim=134)
-	ax.scatter(x[:, 0], x[:, 1], x[:, 2], c=colors)
+def plot_3_2d(x, colors):
+	fig = plt.figure(figsize=plt.figaspect(1/3))
+	ax = fig.add_subplot(1, 3, 1)
+	ax.scatter(x[:, 0], x[:, 1], c=colors)
+	ax.set_xlabel('left')
+	ax.set_ylabel('left_rotation')
+	ax.set_title(IMAGE_TYPES[0])
+	ax = fig.add_subplot(1, 3, 2)
+	ax.scatter(x[:, 2], x[:, 3], c=colors)
+	ax.set_xlabel('left')
+	ax.set_ylabel('left_rotation')
+	ax.set_title(IMAGE_TYPES[1])
+	ax = fig.add_subplot(1, 3, 3)
+	ax.scatter(x[:, 4], x[:, 5], c=colors)
+	ax.set_xlabel('left')
+	ax.set_ylabel('left_rotation')
+	ax.set_title(IMAGE_TYPES[2])
 
 	plt.show()
 
-	# print(trial_results_reshaped[0])
-	# distances = cdist(trial_results_reshaped, trial_results_reshaped, 'euclidean')
-	# for trial_idx, trial_num in enumerate(trials): # idx is the trial position in the list, num is the number given by the folder name
-	# 	trial_results = trial_results_arr[trial_idx]
+def plot_3d(x_list, c_list, t_list):
+	if len(x_list) != len(c_list) or len(c_list) != len(t_list):
+		print('Length of x, color, and title lists must be the same')
 
+	fig = plt.figure(figsize=plt.figaspect(1 / len(x_list)))
+
+	for i, (x, colors, title) in enumerate(zip(x_list, c_list, t_list)):
+		ax = fig.add_subplot(1, len(x_list), i+1, projection='3d')
+		ax.scatter(x[:, 0], x[:, 1], x[:, 2], c=colors)
+		ax.set_xlabel(IMAGE_TYPES[0])
+		ax.set_ylabel(IMAGE_TYPES[1])
+		ax.set_zlabel(IMAGE_TYPES[2])
+		ax.set_title(title)
+
+	plt.show()
+
+def match_data(trials, trial_results_arr):
+	print(np.array(trial_results_arr).shape)
+	NUM_TRIALS = len(trials)
+	num_features = 48
+
+	trial_labels = np.zeros((NUM_TRIALS, NUM_SLICES))
+	for i in range(NUM_TRIALS):
+		trial_labels[i, :] = i
+	trial_labels = trial_labels.reshape(NUM_TRIALS * NUM_SLICES,)
+
+	trial_results_arr = np.array(trial_results_arr).reshape(NUM_TRIALS * NUM_SLICES, num_features)
+	trial_results_scaled = np.copy(trial_results_arr)
+
+	for trial_num in range(NUM_TRIALS):
+		trial_results_scaled[trial_labels == trial_num] -= np.mean(trial_results_scaled[trial_labels == trial_num], axis=0)
+		trial_results_scaled[trial_labels == trial_num] /= np.max(np.abs(trial_results_scaled[trial_labels == trial_num]), axis=0)
+		# trial_results_scaled[trial_labels == trial_num] = StandardScaler().fit(trial_results_scaled[trial_labels == trial_num]).transform(trial_results_scaled[trial_labels == trial_num])
+	
+	# pca = PCA(n_components=3)
+	x = np.mean(trial_results_arr.reshape(NUM_TRIALS * NUM_SLICES, 6, 8), axis=2)
+	# x = pca.fit_transform(x)
+	# print(pca.explained_variance_ratio_.cumsum())
+	# print(pca.components_)
+
+	kmeans = KMeans(n_clusters=4, random_state=38599).fit(trial_results_scaled)
+	# print(np.column_stack((trial_labels, kmeans.labels_)))
+
+	plot_3_2d(x, kmeans.labels_)
+	plot_3_2d(x, trial_labels)
+
+	x_list = [x[:, :3], x[:, :3], x[:, 3:], x[:, 3:]]
+	c_list = [kmeans.labels_, trial_labels, kmeans.labels_, trial_labels]
+	t_list = ['kmeans labels, x 0-2', 'trial labels, x 0-2', 'kmeans labels, x 3-6', 'trial labels, x 3-6']
+	plot_3d(x_list, c_list, t_list)
+
+	# calculate stats for each cluster
+	print(trial_results_arr.shape)
+	for i in range(4):
+		cluster_data = trial_results_arr[kmeans.labels_ == i]
+		avg = np.mean(cluster_data, axis=0).reshape(3, 8, 2)
+		avg = np.mean(avg, axis=1)
+		print('cluster', i)
+		print(avg)
 
 if __name__ == "__main__":
 
