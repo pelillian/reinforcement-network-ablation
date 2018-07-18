@@ -38,16 +38,20 @@ FILENAME_PATTERN = 'actor_trial_'
 
 IMAGE_TYPES =  ['left', 'right', 'forward']
 
+num_images = 0
 # populate image lists so we can test these images later
+# image lists must all have the same number of images
 image_type_list = []
 image_file_list = []
 image_dict = {}
 for image_type in IMAGE_TYPES:
 	image_dict[image_type] = []
+	num_images = 0
 	for image_filename in glob.iglob('camera/' + image_type + '/*.png'):
 			image_type_list.append(image_type)
 			image_file_list.append(image_filename)
 			image_dict[image_type].append(image_filename)
+			num_images += 1
 
 # given a model, actually compute the actions for each image
 def test_network(model, imagefiles_list):
@@ -188,7 +192,7 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 
 			differences = []
 			for image_idx, new in enumerate(new_actions):
-				new_action_array[image_idx + imgtype_num * 8].append(new.tolist())
+				new_action_array[image_idx + imgtype_num * num_images].append(new.tolist())
 				differences.append(new.tolist() - old_action_array[image_idx])
 
 			# remove the 'forward' action, just focusing on the turns
@@ -258,17 +262,39 @@ def plot_3d(x_list, c_list, t_list):
 
 	plt.show()
 
+def plot_results(x, cluster_labels, trial_labels, use_pca=True):
+	if use_pca:
+		pca = PCA(n_components=3)
+		x = pca.fit_transform(x)
+		# print(pca.explained_variance_ratio_.cumsum())
+		# print(pca.components_)
+	else:
+		x = np.mean(x.reshape(len(trial_labels), 6, num_images), axis=2)
+
+	if use_pca:
+		x_list = [x, x]
+		c_list = [cluster_labels, trial_labels]
+		t_list = ['cluster labels', 'trial labels']
+	else:
+		plot_3_2d(x, cluster_labels)
+		plot_3_2d(x, trial_labels)
+
+		x_list = [x[:, :3], x[:, :3], x[:, 3:], x[:, 3:]]
+		c_list = [cluster_labels, trial_labels, cluster_labels, trial_labels]
+		t_list = ['cluster labels, x 0-2', 'trial labels, x 0-2', 'cluster labels, x 3-6', 'trial labels, x 3-6']
+	plot_3d(x_list, c_list, t_list)
+
+
 def match_data(trials, trial_results_arr):
 	print(np.array(trial_results_arr).shape)
 	NUM_TRIALS = len(trials)
-	num_features = 48
 
 	trial_labels = np.zeros((NUM_TRIALS, NUM_SLICES))
 	for i in range(NUM_TRIALS):
 		trial_labels[i, :] = i
 	trial_labels = trial_labels.reshape(NUM_TRIALS * NUM_SLICES,)
 
-	trial_results_arr = np.array(trial_results_arr).reshape(NUM_TRIALS * NUM_SLICES, num_features)
+	trial_results_arr = np.array(trial_results_arr).reshape(NUM_TRIALS * NUM_SLICES, 6 * num_images)
 	trial_results_scaled = np.copy(trial_results_arr)
 
 	for trial_num in range(NUM_TRIALS):
@@ -276,31 +302,26 @@ def match_data(trials, trial_results_arr):
 		trial_results_scaled[trial_labels == trial_num] /= np.max(np.abs(trial_results_scaled[trial_labels == trial_num]), axis=0)
 		# trial_results_scaled[trial_labels == trial_num] = StandardScaler().fit(trial_results_scaled[trial_labels == trial_num]).transform(trial_results_scaled[trial_labels == trial_num])
 	
-	# pca = PCA(n_components=3)
-	x = np.mean(trial_results_arr.reshape(NUM_TRIALS * NUM_SLICES, 6, 8), axis=2)
-	# x = pca.fit_transform(x)
-	# print(pca.explained_variance_ratio_.cumsum())
-	# print(pca.components_)
+	kmeans = KMeans(n_clusters=4, random_state=23588).fit(trial_results_scaled)
+	cluster_labels = kmeans.labels_
+	# print(np.column_stack((trial_labels, cluster_labels)))
 
-	kmeans = KMeans(n_clusters=4, random_state=38599).fit(trial_results_scaled)
-	# print(np.column_stack((trial_labels, kmeans.labels_)))
-
-	plot_3_2d(x, kmeans.labels_)
-	plot_3_2d(x, trial_labels)
-
-	x_list = [x[:, :3], x[:, :3], x[:, 3:], x[:, 3:]]
-	c_list = [kmeans.labels_, trial_labels, kmeans.labels_, trial_labels]
-	t_list = ['kmeans labels, x 0-2', 'trial labels, x 0-2', 'kmeans labels, x 3-6', 'trial labels, x 3-6']
-	plot_3d(x_list, c_list, t_list)
+	plot_results(trial_results_scaled, cluster_labels, trial_labels, use_pca=True)
 
 	# calculate stats for each cluster
-	print(trial_results_arr.shape)
+	print(trial_results_scaled.shape)
 	for i in range(4):
-		cluster_data = trial_results_arr[kmeans.labels_ == i]
-		avg = np.mean(cluster_data, axis=0).reshape(3, 8, 2)
-		avg = np.mean(avg, axis=1)
-		print('cluster', i)
-		print(avg)
+		cluster_data = trial_results_scaled[
+			(cluster_labels == i)
+		 	# & (trial_labels  == 0)
+		 ]
+		if len(cluster_data) > 0:
+			avg = np.mean(cluster_data, axis=0).reshape(3, num_images, 2)
+			avg = np.mean(avg, axis=1)
+			print('cluster', i)
+			print(avg)
+		else:
+			print('cluster', i, 'empty')
 
 if __name__ == "__main__":
 
