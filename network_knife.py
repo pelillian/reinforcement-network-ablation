@@ -12,7 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from sklearn.preprocessing import StandardScaler
+# from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 
@@ -246,7 +246,7 @@ def plot_3_2d(x, colors):
 
 	plt.show()
 
-def plot_3d(x_list, c_list, t_list):
+def plot_3d(x_list, c_list, t_list, use_pca):
 	if len(x_list) != len(c_list) or len(c_list) != len(t_list):
 		print('Length of x, color, and title lists must be the same')
 
@@ -255,9 +255,10 @@ def plot_3d(x_list, c_list, t_list):
 	for i, (x, colors, title) in enumerate(zip(x_list, c_list, t_list)):
 		ax = fig.add_subplot(1, len(x_list), i+1, projection='3d')
 		ax.scatter(x[:, 0], x[:, 1], x[:, 2], c=colors)
-		ax.set_xlabel(IMAGE_TYPES[0])
-		ax.set_ylabel(IMAGE_TYPES[1])
-		ax.set_zlabel(IMAGE_TYPES[2])
+		if not use_pca:
+			ax.set_xlabel(IMAGE_TYPES[0])
+			ax.set_ylabel(IMAGE_TYPES[1])
+			ax.set_zlabel(IMAGE_TYPES[2])
 		ax.set_title(title)
 
 	plt.show()
@@ -282,7 +283,7 @@ def plot_results(x, cluster_labels, trial_labels, use_pca=True):
 		x_list = [x[:, :3], x[:, :3], x[:, 3:], x[:, 3:]]
 		c_list = [cluster_labels, trial_labels, cluster_labels, trial_labels]
 		t_list = ['cluster labels, x 0-2', 'trial labels, x 0-2', 'cluster labels, x 3-6', 'trial labels, x 3-6']
-	plot_3d(x_list, c_list, t_list)
+	plot_3d(x_list, c_list, t_list, use_pca)
 
 
 def match_data(trials, trial_results_arr):
