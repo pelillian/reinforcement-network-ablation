@@ -162,7 +162,7 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 	original_weights = np.copy(model.get_weights())
 
 	# test the network on the unmodified model as a baseline for comparison
-	old_action_array = test_network(model, imagefiles_list)
+	orig_actions = test_network(model, imagefiles_list)
 
 	# for each group of neurons, create a mask dropping out that group
 	mask_list = get_masks(original_weights)
@@ -170,7 +170,7 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 	# calculate the actions for each mask
 	# create a list with an inner list for each image
 	new_action_array = [] # actions for each mask after it's applied
-	for image_idx in range(len(old_action_array)):
+	for image_idx in range(len(orig_actions)):
 				new_action_array.append([])
 
 	all_differences = []
@@ -193,13 +193,13 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 			differences = []
 			for image_idx, new in enumerate(new_actions):
 				new_action_array[image_idx + imgtype_num * num_images].append(new.tolist())
-				differences.append(new.tolist() - old_action_array[image_idx])
+				differences.append(new.tolist() - orig_actions[image_idx])
 
 			# remove the 'forward' action, just focusing on the turns
 			differences = np.array(differences)[:, 1:]
 			# calculate the mean across all the images (in the group)
 			# trial_results[mask_num][imgtype_num] = np.mean(differences, axis=0).tolist()
-			trial_results[mask_num][imgtype_num] = differences.tolist()
+			trial_results[mask_num][imgtype_num] = np.array(new_actions)[:, 1:].tolist()
 			all_differences.append(differences)
 
 	action_max = np.max(np.abs(np.array(all_differences)))
@@ -208,7 +208,7 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 	with PdfPages(re.sub('\..+', '.pdf', network_file_path)) as pdf:
 		for image_idx, image_filename in enumerate(image_file_list):
 
-			old_action = old_action_array[image_idx]
+			old_action = orig_actions[image_idx]
 			new_actions = new_action_array[image_idx]
 
 			# calculate the norm between each new action and the old action for coloring
@@ -223,8 +223,7 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 			plot_actions(pdf, colors, colors, action_max, "Image " + str(image_idx + 1) + " Differences")
 
 	# for the entire trial, we've calculated the differences between the unmodified network and each network with different parts cut out.
-	# trial_results is the differences averaged over all of the input images in each group
-	return np.array(trial_results)
+	return (np.array(trial_results), np.array(orig_actions))
 		
 def plot_3_2d(x, colors):
 	fig = plt.figure(figsize=plt.figaspect(1/3))
@@ -286,7 +285,7 @@ def plot_results(x, cluster_labels, trial_labels, use_pca=True):
 	plot_3d(x_list, c_list, t_list, use_pca)
 
 
-def match_data(trials, trial_results_arr):
+def match_data(trial_results_arr, orig_actions_arr, trials):
 	print(np.array(trial_results_arr).shape)
 	NUM_TRIALS = len(trials)
 
@@ -327,6 +326,7 @@ def match_data(trials, trial_results_arr):
 if __name__ == "__main__":
 
 	trial_results_arr = []
+	orig_actions_arr = []
 	trials = []
 
 	if len(sys.argv) < 2 or '-s' not in sys.argv:
@@ -339,19 +339,20 @@ if __name__ == "__main__":
 			trial_num = int(re.search(r'\d+', re.sub('.*(\\\/)', '', network_file_path)).group(0))
 
 			# test the network!
-			trial_results = test_network_knife(actor_model, network_file_path, image_file_list, image_type_list)
+			trial_results, orig_actions = test_network_knife(actor_model, network_file_path, image_file_list, image_type_list)
 
 			trial_results_arr.append(trial_results)
+			orig_actions_arr.append(orig_actions)
 
 			trials.append(trial_num)
 
 		with open("trial_results.p", "wb") as tr:
-			pkl.dump((trial_results_arr, trials), tr, protocol=pkl.HIGHEST_PROTOCOL)
+			pkl.dump((trial_results_arr, orig_actions_arr, trials), tr, protocol=pkl.HIGHEST_PROTOCOL)
 
 		K.clear_session()
 
 	else:
 		with open("trial_results.p", "rb") as tr:
-			trial_results_arr, trials = pkl.load(tr)
+			trial_results_arr, orig_actions_arr, trials = pkl.load(tr)
 
-	match_data(trials, trial_results_arr)
+	match_data(trial_results_arr, orig_actions_arr, trials)
