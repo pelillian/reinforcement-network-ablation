@@ -288,6 +288,7 @@ def plot_results(x, cluster_labels, trial_labels, use_pca=True):
 def match_data(trial_results_arr, orig_actions_arr, trials):
 	print(np.array(trial_results_arr).shape)
 	NUM_TRIALS = len(trials)
+	N_CLUSTERS = 4
 
 	trial_labels = np.zeros((NUM_TRIALS, NUM_SLICES))
 	for i in range(NUM_TRIALS):
@@ -302,7 +303,7 @@ def match_data(trial_results_arr, orig_actions_arr, trials):
 		trial_results_scaled[trial_labels == trial_num] /= np.max(np.abs(trial_results_scaled[trial_labels == trial_num]), axis=0)
 		# trial_results_scaled[trial_labels == trial_num] = StandardScaler().fit(trial_results_scaled[trial_labels == trial_num]).transform(trial_results_scaled[trial_labels == trial_num])
 	
-	kmeans = KMeans(n_clusters=4, random_state=23588).fit(trial_results_scaled)
+	kmeans = KMeans(n_clusters=N_CLUSTERS, random_state=23588).fit(trial_results_scaled)
 	cluster_labels = kmeans.labels_
 	# print(np.column_stack((trial_labels, cluster_labels)))
 
@@ -310,7 +311,7 @@ def match_data(trial_results_arr, orig_actions_arr, trials):
 
 	# calculate stats for each cluster
 	print(trial_results_scaled.shape)
-	for i in range(4):
+	for i in range(N_CLUSTERS):
 		cluster_data = trial_results_scaled[
 			(cluster_labels == i)
 		 	# & (trial_labels  == 0)
