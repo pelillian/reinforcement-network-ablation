@@ -235,7 +235,7 @@ def match_data(trial_results, original_pred):
 	trial_results_scaled /= np.max(np.abs(trial_results_scaled), axis=0)
 	# trial_results_scaled[trial_labels == trial_num] = StandardScaler().fit(trial_results_scaled[trial_labels == trial_num]).transform(trial_results_scaled[trial_labels == trial_num])
 	
-	kmeans = KMeans(n_clusters=NUM_CLUSTERS, random_state=23588).fit(trial_results_scaled)
+	kmeans = KMeans(n_clusters=NUM_CLUSTERS, random_state=23589).fit(trial_results_scaled)
 	cluster_labels = kmeans.labels_
 	# print(np.column_stack((trial_labels, cluster_labels)))
 
@@ -247,12 +247,18 @@ def match_data(trial_results, original_pred):
 		cluster_data = trial_results[(cluster_labels == i)]
 		cluster_data = cluster_data.reshape(cluster_data.shape[0], len(IMAGE_TYPES), num_images, len(IMAGE_IDX))
 		if len(cluster_data) > 0:
-			print(cluster_data.shape)
 			avg = np.mean(cluster_data, axis=2)
-			print('cluster', i)
+			avg = avg.reshape(avg.shape[0], len(IMAGE_TYPES) * len(IMAGE_IDX))[:, [0, 5, 10]]
+			avg = np.mean(avg, axis=0)
+			print('cluster', i, cluster_data.shape)
 			print(np.round(avg, 2))
 		else:
 			print('cluster', i, 'empty')
+
+	print('original_pred', original_pred.shape)
+	avg_original_pred = np.mean(original_pred, axis=1)
+	avg_original_pred = avg_original_pred.reshape(len(IMAGE_TYPES) * len(IMAGE_IDX))[[0, 5, 10]]
+	print(avg_original_pred)
 
 if __name__ == "__main__":
 
