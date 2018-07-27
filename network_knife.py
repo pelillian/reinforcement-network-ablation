@@ -61,18 +61,12 @@ def test_network(model, imagefiles_list):
 		img = imread(image_filename, as_gray=False, pilmode="RGB")
 		img = img / np.max(img)
 
-		# size = (40, 40, 3)
-		# img = np.array(img.getdata(), np.uint8).reshape(frame.size[1], frame.size[0], 3)
-		# img = (imresize(img, size) / 127.5 - 1)
-
 		graph = tf.get_default_graph()
 
 		with graph.as_default():
-				# print(np.expand_dims(img, axis=0))
 				model._make_predict_function()
 				K.set_learning_phase(0)
 
-				#print(self.actor.predict(np.expand_dims(img,axis=0)).shape)
 				action = np.reshape(model.predict(np.expand_dims(img, axis=0)), ACTIONS)
 
 		if np.any(np.isnan(action)):
@@ -81,10 +75,6 @@ def test_network(model, imagefiles_list):
 		# Actions:
 		# Forward, Left, Left Rotation
 		# x0.03, x0.03, x90*
-
-		image_filename = image_filename.replace('\\', '/')
-		image_filename = image_filename.replace('camera/img', '')
-		image_filename = image_filename.replace('.png', '')
 
 		action_list.append(action)
 
@@ -125,10 +115,25 @@ def num_to_color(arr):
 			new_arr.append((item, 0, 1 - item))
 	return new_arr
 
-def plot_actions(pdf, actions, colors, action_max, title, zero_index=True):
+def plot_actions(pdf, actions, action_max, title, colors=None, zero_index=True):
+	font = {'family' : 'League Spartan',
+		'weight' : 'bold'}
+	plt.rc('font', **font)
+
 	ind = np.arange(len(actions))
 	if not zero_index:
-		ind += 1
+		actions = np.delete(actions, (0), axis=0)
+		if colors is not None:
+			colors = np.delete(colors, (0), axis=0)
+		ind = np.arange(len(actions)) + 1
+
+
+	if colors is None:
+		color_0 = ['#ea4626'] * len(actions)
+		color_1 = ['#0060ff'] * len(actions)
+	else:
+		color_0 = num_to_color( np.abs(colors[:, 0] / action_max) )
+		color_1 = num_to_color( np.abs(colors[:, 1] / action_max) )
 
 	ax = plt.subplot(111)
 
@@ -136,14 +141,15 @@ def plot_actions(pdf, actions, colors, action_max, title, zero_index=True):
 
 	# plt.figure().imshow(plt.imread(image_filename), extent=[-0.5, 0.5, np.max(old_action) + PLOT_WIDTH, np.max(old_action) + 4*PLOT_WIDTH])
 
-	color_0 = num_to_color( np.abs(colors[:, 0] / action_max) )
-	ax.bar(ind - PLOT_WIDTH, actions[:, 0], width=PLOT_WIDTH, align='center', color=color_0)
+	ax.grid(color='#bbbbbb', linestyle='solid', linewidth=1)
+	ax.set_axisbelow(True)
 
-	color_1 = num_to_color( np.abs(colors[:, 1] / action_max) )
-	ax.bar(ind,               actions[:, 1], width=PLOT_WIDTH, align='center', color=color_1)
+	ax.bar(ind - (PLOT_WIDTH / 2), actions[:, 0], width=PLOT_WIDTH, align='center', color=color_0)
+	ax.bar(ind + (PLOT_WIDTH / 2), actions[:, 1], width=PLOT_WIDTH, align='center', color=color_1)
 
-	color_2 = num_to_color( np.abs(colors[:, 2] / action_max) )
-	ax.bar(ind + PLOT_WIDTH, actions[:, 2], width=PLOT_WIDTH, align='center', color=color_2)
+	ax.set_xlabel('Ablation Group')
+	ax.set_ylabel('Output Change (Action Space)')
+	ax.set_xticks(range(1, 11))
 
 	# ax2 = plt.figure().add_axes([0, 0.9, 0.1, 0.1])
 	# ax2.imshow(plt.imread(image_filename))
@@ -216,15 +222,22 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 			for new in new_actions:
 				differences.append(new - old_action)
 
-			actions = np.array([old_action] + new_actions)
-			colors = np.array(differences)
+			actions = np.delete(np.array([old_action] + new_actions), 0, axis=1)
+			differences =  np.delete(np.array(differences), 0, axis=1)
 
-			plot_actions(pdf, actions, colors, action_max, "Image " + str(image_idx + 1) + " (" + imagetypes_list[image_idx] + ")")
-			plot_actions(pdf, colors, colors, action_max, "Image " + str(image_idx + 1) + " Differences")
+			plot_actions(pdf, actions, action_max, "Image " + str(image_idx + 1) + " (" + imagetypes_list[image_idx] + ")", colors=differences)
+			plot_actions(pdf, differences, action_max, "Image " + str(image_idx + 1), zero_index=False)
 
 	# for the entire trial, we've calculated the differences between the unmodified network and each network with different parts cut out.
 	return (np.array(trial_results), np.array(orig_actions))
-		
+
+def colors(labels):
+	colors = []
+	colormap = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple', 'tab:red', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
+	for i in range(len(labels)):
+		colors.append(colormap[(int(labels[i])) % 10])
+	return colors
+
 def plot_3_2d(x, colors):
 	fig = plt.figure(figsize=plt.figaspect(1/3))
 	ax = fig.add_subplot(1, 3, 1)
@@ -245,11 +258,38 @@ def plot_3_2d(x, colors):
 
 	plt.show()
 
+def plot_2d(x_list, c_list, t_list):
+	if len(x_list) != len(c_list) or len(c_list) != len(t_list):
+		print('Length of x, color, and title lists must be the same')
+
+	if len(x_list) > 1:
+		fig = plt.figure(figsize=plt.figaspect(1 / len(x_list)))
+	else:
+		fig = plt.figure(figsize=(1024/128, 1024/128), dpi=128)
+
+	for i, (x, colors, title) in enumerate(zip(x_list, c_list, t_list)):
+		if len(x[0]) > 2: # use pca to remove extra dims
+			pca = PCA(n_components=2)
+			x = pca.fit_transform(x)
+			use_pca = True
+
+		ax = fig.add_subplot(1, len(x_list), i+1)
+		ax.scatter(x[:, 0], x[:, 1], c=colors)
+		if use_pca:
+			ax.set_xlabel('First Principal Component')
+			ax.set_ylabel('Second Principal Component')
+		ax.set_title(title)
+
+	plt.savefig('graphs/network_knife_ours.png', dpi=128)
+
 def plot_3d(x_list, c_list, t_list, use_pca):
 	if len(x_list) != len(c_list) or len(c_list) != len(t_list):
 		print('Length of x, color, and title lists must be the same')
 
-	fig = plt.figure(figsize=plt.figaspect(1 / len(x_list)))
+	if len(x_list) > 1:
+		fig = plt.figure(figsize=plt.figaspect(1 / len(x_list)))
+	else:
+		fig = plt.figure(figsize=(1024, 1024))
 
 	for i, (x, colors, title) in enumerate(zip(x_list, c_list, t_list)):
 		ax = fig.add_subplot(1, len(x_list), i+1, projection='3d')
@@ -263,6 +303,17 @@ def plot_3d(x_list, c_list, t_list, use_pca):
 	plt.show()
 
 def plot_results(x, cluster_labels, trial_labels, use_pca=True):
+	font = {'family' : 'League Spartan',
+		'weight' : 'bold',
+		'size' : '28'}
+	plt.rc('font', **font)
+	from matplotlib import rcParams
+	rcParams.update({'figure.autolayout': True})
+	plt.tight_layout()
+
+	cluster_labels = colors(cluster_labels)
+	trial_labels = colors(trial_labels)
+
 	if use_pca:
 		pca = PCA(n_components=3)
 		x = pca.fit_transform(x)
@@ -283,6 +334,7 @@ def plot_results(x, cluster_labels, trial_labels, use_pca=True):
 		c_list = [cluster_labels, trial_labels, cluster_labels, trial_labels]
 		t_list = ['cluster labels, x 0-2', 'trial labels, x 0-2', 'cluster labels, x 3-6', 'trial labels, x 3-6']
 	plot_3d(x_list, c_list, t_list, use_pca)
+	plot_2d([x], [cluster_labels], [''])
 
 
 def match_data(trial_results_arr, orig_actions_arr, trials):
