@@ -23,7 +23,12 @@ if len(sys.argv) < 2 or '-s' not in sys.argv:
 	from keras.models import load_model
 	from keras import backend as K
 
-	from keras.applications.xception import Xception
+	if '-vgg19' in sys.argv:
+		from keras.applications.vgg19 import VGG19
+		MODEL = 'VGG19'
+	else:
+		from keras.applications.xception import Xception
+		MODEL = 'Xception'
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -94,42 +99,6 @@ def get_masks(original_weights):
 		mask_list.append(mask_)
 
 	return mask_list
-
-def num_to_color(arr):
-	new_arr = []
-	for item in arr.tolist():
-		if item == 0:
-			new_arr.append((0, 1, 0))
-		else:
-			new_arr.append((item, 0, 1 - item))
-	return new_arr
-
-def plot_actions(pdf, actions, colors, action_max, title, zero_index=True):
-	ind = np.arange(len(actions))
-	if not zero_index:
-		ind += 1
-
-	ax = plt.subplot(111)
-
-	# use subplots2grid to add the images
-
-	# plt.figure().imshow(plt.imread(image_filename), extent=[-0.5, 0.5, np.max(old_action) + PLOT_WIDTH, np.max(old_action) + 4*PLOT_WIDTH])
-
-	color_0 = num_to_color( np.abs(colors[:, 0] / action_max) )
-	ax.bar(ind - PLOT_WIDTH, actions[:, 0], width=PLOT_WIDTH, align='center', color=color_0)
-
-	color_1 = num_to_color( np.abs(colors[:, 1] / action_max) )
-	ax.bar(ind,               actions[:, 1], width=PLOT_WIDTH, align='center', color=color_1)
-
-	color_2 = num_to_color( np.abs(colors[:, 2] / action_max) )
-	ax.bar(ind + PLOT_WIDTH, actions[:, 2], width=PLOT_WIDTH, align='center', color=color_2)
-
-	# ax2 = plt.figure().add_axes([0, 0.9, 0.1, 0.1])
-	# ax2.imshow(plt.imread(image_filename))
-
-	plt.title(title)
-	pdf.savefig()
-	plt.clf()
 
 def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_list):
 
@@ -267,7 +236,14 @@ if __name__ == "__main__":
 	if len(sys.argv) < 2 or '-s' not in sys.argv:
 
 		K.set_learning_phase(0)
-		model = Xception(include_top=True, weights='imagenet', input_tensor=None, input_shape=None, pooling=None, classes=1000)
+
+		if MODEL == 'VGG19':
+			model = VGG19(include_top=True, weights='imagenet', input_tensor=None, input_shape=None, pooling=None, classes=1000)
+		elif MODEL == 'Xception':
+			model = Xception(include_top=True, weights='imagenet', input_tensor=None, input_shape=None, pooling=None, classes=1000)
+		else:
+			print('Error unrecognised model!')
+			exit(-1)
 
 		# for network_file_path in glob.iglob('test_networks/' + FILENAME_PATTERN + '*.h5'):
 		network_file_path = 'test_networks/imagenet.pdf'
