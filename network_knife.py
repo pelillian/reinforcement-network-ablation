@@ -15,6 +15,10 @@ from scipy.spatial.distance import cdist
 # from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+
+from scipy.spatial import Voronoi, voronoi_plot_2d
+from voronoi_2d import voronoi_finite_polygons_2d
 
 if len(sys.argv) < 2 or '-s' not in sys.argv:
 	from imageio import imread
@@ -233,7 +237,7 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 
 def colors(labels):
 	colors = []
-	colormap = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple', 'tab:red', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
+	colormap = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 	for i in range(len(labels)):
 		colors.append(colormap[(int(labels[i])) % 10])
 	return colors
@@ -258,27 +262,37 @@ def plot_3_2d(x, colors):
 
 	plt.show()
 
-def plot_2d(x_list, c_list, t_list):
-	if len(x_list) != len(c_list) or len(c_list) != len(t_list):
-		print('Length of x, color, and title lists must be the same')
+def save_plot_2d(x, colors, title, cluster_centers=None):
+	fig = plt.figure(figsize=(1024/128, 1024/128), dpi=128)
 
-	if len(x_list) > 1:
-		fig = plt.figure(figsize=plt.figaspect(1 / len(x_list)))
-	else:
-		fig = plt.figure(figsize=(1024/128, 1024/128), dpi=128)
+	if len(x[0]) > 2: # use pca to remove extra dims
+		pca = PCA(n_components=2)
+		x = pca.fit_transform(x)
+		use_pca = True
 
-	for i, (x, colors, title) in enumerate(zip(x_list, c_list, t_list)):
-		if len(x[0]) > 2: # use pca to remove extra dims
-			pca = PCA(n_components=2)
-			x = pca.fit_transform(x)
-			use_pca = True
 
-		ax = fig.add_subplot(1, len(x_list), i+1)
-		ax.scatter(x[:, 0], x[:, 1], c=colors)
-		if use_pca:
-			ax.set_xlabel('First Principal Component')
-			ax.set_ylabel('Second Principal Component')
-		ax.set_title(title)
+	ax = fig.add_subplot(1, 1, 1)
+	ax.scatter(x[:, 0], x[:, 1], c=colors)
+	if use_pca:
+		ax.set_xlabel('First Principal Component')
+		ax.set_ylabel('Second Principal Component')
+	ax.set_title(title)
+
+	xlim = ax.get_xlim()
+	ylim = ax.get_ylim()
+
+	if cluster_centers is not None:
+		cluster_centers = pca.transform(cluster_centers)
+
+		vor = Voronoi(cluster_centers)
+		regions, vertices = voronoi_finite_polygons_2d(vor, 10)
+
+		for region in regions:
+			polygon = vertices[region]
+			plt.fill(*zip(*polygon), alpha=0.15)
+
+		plt.xlim(xlim)
+		plt.ylim(ylim)
 
 	plt.savefig('graphs/network_knife_ours.png', dpi=128)
 
@@ -302,10 +316,10 @@ def plot_3d(x_list, c_list, t_list, use_pca):
 
 	plt.show()
 
-def plot_results(x, cluster_labels, trial_labels, use_pca=True):
+def plot_results(x, cluster_labels, trial_labels, cluster_centers=None, use_pca=True):
 	font = {'family' : 'League Spartan',
 		'weight' : 'bold',
-		'size' : '28'}
+		'size' : '24'}
 	plt.rc('font', **font)
 	from matplotlib import rcParams
 	rcParams.update({'figure.autolayout': True})
@@ -316,14 +330,14 @@ def plot_results(x, cluster_labels, trial_labels, use_pca=True):
 
 	if use_pca:
 		pca = PCA(n_components=3)
-		x = pca.fit_transform(x)
+		x_pca = pca.fit_transform(x)
 		# print(pca.explained_variance_ratio_.cumsum())
 		# print(pca.components_)
 	else:
 		x = np.mean(x.reshape(len(trial_labels), 6, num_images), axis=2)
 
 	if use_pca:
-		x_list = [x, x]
+		x_list = [x_pca, x_pca]
 		c_list = [cluster_labels, trial_labels]
 		t_list = ['cluster labels', 'trial labels']
 	else:
@@ -334,13 +348,13 @@ def plot_results(x, cluster_labels, trial_labels, use_pca=True):
 		c_list = [cluster_labels, trial_labels, cluster_labels, trial_labels]
 		t_list = ['cluster labels, x 0-2', 'trial labels, x 0-2', 'cluster labels, x 3-6', 'trial labels, x 3-6']
 	plot_3d(x_list, c_list, t_list, use_pca)
-	plot_2d([x], [cluster_labels], [''])
+	save_plot_2d(x, cluster_labels, '', cluster_centers=cluster_centers)
 
 
 def match_data(trial_results_arr, orig_actions_arr, trials):
 	print(np.array(trial_results_arr).shape)
 	NUM_TRIALS = len(trials)
-	N_CLUSTERS = 4
+	num_clusters = 6 # 6 almost always gets the highest silhouette score
 
 	trial_labels = np.zeros((NUM_TRIALS, NUM_SLICES))
 	for i in range(NUM_TRIALS):
@@ -355,15 +369,30 @@ def match_data(trial_results_arr, orig_actions_arr, trials):
 		trial_results_scaled[trial_labels == trial_num] /= np.max(np.abs(trial_results_scaled[trial_labels == trial_num]), axis=0)
 		# trial_results_scaled[trial_labels == trial_num] = StandardScaler().fit(trial_results_scaled[trial_labels == trial_num]).transform(trial_results_scaled[trial_labels == trial_num])
 	
-	kmeans = KMeans(n_clusters=N_CLUSTERS, random_state=23588).fit(trial_results_scaled)
+	# import random
+	# for random_num in random.sample(range(1, 99999), 10):
+	# 	sh_scores = []
+	# 	clusters_to_check = range(2, 20)
+	# 	for num_clusters in clusters_to_check:
+	# 		kmeans = KMeans(n_clusters=num_clusters, random_state=random_num).fit(trial_results_scaled)
+	# 		sh = silhouette_score(trial_results_scaled, kmeans.labels_)
+	# 		sh_scores.append(sh)
+	# 	max_score = max(sh_scores)
+	# 	num_clusters = clusters_to_check[sh_scores.index(max_score)]
+	# 	print(num_clusters, max_score)
+
+
+	kmeans = KMeans(n_clusters=num_clusters, random_state=23588).fit(trial_results_scaled)
 	cluster_labels = kmeans.labels_
+	cluster_centers = kmeans.cluster_centers_
+
 	# print(np.column_stack((trial_labels, cluster_labels)))
 
-	plot_results(trial_results_scaled, cluster_labels, trial_labels, use_pca=True)
+	plot_results(trial_results_scaled, cluster_labels, trial_labels, cluster_centers=cluster_centers, use_pca=True)
 
 	# calculate stats for each cluster
 	print(trial_results_scaled.shape)
-	for i in range(N_CLUSTERS):
+	for i in range(num_clusters):
 		cluster_data = trial_results_scaled[
 			(cluster_labels == i)
 		 	# & (trial_labels  == 0)
