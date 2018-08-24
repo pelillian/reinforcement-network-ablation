@@ -1,4 +1,5 @@
 # this code is by Pauli Virtanen
+# https://gist.github.com/pv/8036995
 
 import numpy as np
 

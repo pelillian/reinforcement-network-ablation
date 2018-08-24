@@ -43,6 +43,10 @@ FILENAME_PATTERN = 'actor_trial_'
 IMAGE_TYPES =  ['left', 'right', 'forward']
 
 num_images = 0
+
+COLORMAP = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
+MARKERMAP = ['o', 's', '^', '*', 'X', 'H']
+
 # populate image lists so we can test these images later
 # image lists must all have the same number of images
 image_type_list = []
@@ -235,12 +239,19 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 	# for the entire trial, we've calculated the differences between the unmodified network and each network with different parts cut out.
 	return (np.array(trial_results), np.array(orig_actions))
 
-def colors(labels):
+def get_colors(labels):
 	colors = []
-	colormap = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 	for i in range(len(labels)):
-		colors.append(colormap[(int(labels[i])) % 10])
+		colors.append(COLORMAP[(int(labels[i]))])
 	return colors
+
+def get_markers(labels):
+	print(labels)
+	markers = []
+	for i in range(len(labels)):
+		markers.append(MARKERMAP[(int(labels[i]))])
+	print(markers)
+	return markers
 
 def plot_3_2d(x, colors):
 	fig = plt.figure(figsize=plt.figaspect(1/3))
@@ -262,7 +273,7 @@ def plot_3_2d(x, colors):
 
 	plt.show()
 
-def save_plot_2d(x, colors, title, cluster_centers=None):
+def save_plot_2d(x, colors, markers, title, cluster_centers=None):
 	fig = plt.figure(figsize=(1024/128, 1024/128), dpi=128)
 
 	if len(x[0]) > 2: # use pca to remove extra dims
@@ -270,9 +281,13 @@ def save_plot_2d(x, colors, title, cluster_centers=None):
 		x = pca.fit_transform(x)
 		use_pca = True
 
+	colors = np.array(colors)
 
 	ax = fig.add_subplot(1, 1, 1)
-	ax.scatter(x[:, 0], x[:, 1], c=colors)
+	# ax.scatter(x[:, 0], x[:, 1], c=colors)
+	for m in np.unique(markers):
+		this_trial = [m == mark for mark in markers]
+		ax.scatter(x[this_trial, 0], x[this_trial, 1], c=colors[this_trial], marker=m, s=100)
 	if use_pca:
 		ax.set_xlabel('First Principal Component')
 		ax.set_ylabel('Second Principal Component')
@@ -325,8 +340,9 @@ def plot_results(x, cluster_labels, trial_labels, cluster_centers=None, use_pca=
 	rcParams.update({'figure.autolayout': True})
 	plt.tight_layout()
 
-	cluster_labels = colors(cluster_labels)
-	trial_labels = colors(trial_labels)
+	cluster_colors = get_colors(cluster_labels)
+	trial_colors = get_colors(trial_labels)
+	trial_markers = get_markers(trial_labels)
 
 	if use_pca:
 		pca = PCA(n_components=3)
@@ -334,21 +350,23 @@ def plot_results(x, cluster_labels, trial_labels, cluster_centers=None, use_pca=
 		# print(pca.explained_variance_ratio_.cumsum())
 		# print(pca.components_)
 	else:
-		x = np.mean(x.reshape(len(trial_labels), 6, num_images), axis=2)
+		x = np.mean(x.reshape(len(trial_colors), 6, num_images), axis=2)
 
 	if use_pca:
 		x_list = [x_pca, x_pca]
-		c_list = [cluster_labels, trial_labels]
+		c_list = [cluster_colors, trial_colors]
 		t_list = ['cluster labels', 'trial labels']
 	else:
-		plot_3_2d(x, cluster_labels)
-		plot_3_2d(x, trial_labels)
+		# plot_3_2d(x, cluster_colors)
+		# plot_3_2d(x, trial_colors)
 
 		x_list = [x[:, :3], x[:, :3], x[:, 3:], x[:, 3:]]
-		c_list = [cluster_labels, trial_labels, cluster_labels, trial_labels]
+		c_list = [cluster_colors, trial_colors, cluster_colors, trial_colors]
 		t_list = ['cluster labels, x 0-2', 'trial labels, x 0-2', 'cluster labels, x 3-6', 'trial labels, x 3-6']
-	plot_3d(x_list, c_list, t_list, use_pca)
-	save_plot_2d(x, cluster_labels, '', cluster_centers=cluster_centers)
+
+
+	# plot_3d(x_list, c_list, t_list, use_pca)
+	save_plot_2d(x, cluster_colors, trial_markers, '', cluster_centers=cluster_centers)
 
 
 def match_data(trial_results_arr, orig_actions_arr, trials):
