@@ -372,7 +372,7 @@ def plot_results(x, cluster_labels, trial_labels, cluster_centers=None, use_pca=
 def match_data(trial_results_arr, orig_actions_arr, trials):
 	print(np.array(trial_results_arr).shape)
 	NUM_TRIALS = len(trials)
-	num_clusters = 6 # 6 almost always gets the highest silhouette score
+	# num_clusters = 6 # 6 almost always gets the highest silhouette score
 
 	trial_labels = np.zeros((NUM_TRIALS, NUM_SLICES))
 	for i in range(NUM_TRIALS):
@@ -387,17 +387,23 @@ def match_data(trial_results_arr, orig_actions_arr, trials):
 		trial_results_scaled[trial_labels == trial_num] /= np.max(np.abs(trial_results_scaled[trial_labels == trial_num]), axis=0)
 		# trial_results_scaled[trial_labels == trial_num] = StandardScaler().fit(trial_results_scaled[trial_labels == trial_num]).transform(trial_results_scaled[trial_labels == trial_num])
 	
-	# import random
-	# for random_num in random.sample(range(1, 99999), 10):
-	# 	sh_scores = []
-	# 	clusters_to_check = range(2, 20)
-	# 	for num_clusters in clusters_to_check:
-	# 		kmeans = KMeans(n_clusters=num_clusters, random_state=random_num).fit(trial_results_scaled)
-	# 		sh = silhouette_score(trial_results_scaled, kmeans.labels_)
-	# 		sh_scores.append(sh)
-	# 	max_score = max(sh_scores)
-	# 	num_clusters = clusters_to_check[sh_scores.index(max_score)]
-	# 	print(num_clusters, max_score)
+	print("silhouette scoring")
+	import random
+	clusters_to_check = range(2, 20)
+	sh_scores = []
+	i = 0
+	for random_num in random.sample(range(1, 99999), 10):
+		sh_scores.append([])
+		for num_clusters in clusters_to_check:
+			kmeans = KMeans(n_clusters=num_clusters, random_state=random_num).fit(trial_results_scaled)
+			sh = silhouette_score(trial_results_scaled, kmeans.labels_)
+			sh_scores[i].append(sh)
+		i += 1
+	sh_scores = np.mean(np.array(sh_scores), axis=0)
+	print(sh_scores)
+	max_score = np.max(sh_scores)
+	num_clusters = clusters_to_check[sh_scores.tolist().index(max_score)]
+	print(max_score, num_clusters)
 
 
 	kmeans = KMeans(n_clusters=num_clusters, random_state=23588).fit(trial_results_scaled)
