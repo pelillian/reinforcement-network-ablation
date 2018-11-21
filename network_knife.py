@@ -123,7 +123,7 @@ def num_to_color(arr):
 			new_arr.append((item, 0, 1 - item))
 	return new_arr
 
-def plot_actions(pdf, actions, action_max, title, colors=None, zero_index=True):
+def plot_actions(pdf, actions, action_max, title, colors=None, zero_index=True, y_label="Output"):
 	font = {'family' : 'League Spartan',
 		'weight' : 'bold'}
 	plt.rc('font', **font)
@@ -156,7 +156,7 @@ def plot_actions(pdf, actions, action_max, title, colors=None, zero_index=True):
 	ax.bar(ind + (PLOT_WIDTH / 2), actions[:, 1], width=PLOT_WIDTH, align='center', color=color_1)
 
 	ax.set_xlabel('Ablation Group')
-	ax.set_ylabel('Output Change (Action Space)')
+	ax.set_ylabel(y_label)
 	ax.set_xticks(range(1, 11))
 
 	# ax2 = plt.figure().add_axes([0, 0.9, 0.1, 0.1])
@@ -234,7 +234,7 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 			differences =  np.delete(np.array(differences), 0, axis=1)
 
 			plot_actions(pdf, actions, action_max, "Image " + str(image_idx + 1) + " (" + imagetypes_list[image_idx] + ")", colors=differences)
-			plot_actions(pdf, differences, action_max, "Image " + str(image_idx + 1), zero_index=False)
+			plot_actions(pdf, differences, action_max, "Image " + str(image_idx + 1), zero_index=False, y_label='Output Change (Action Space)')
 
 	# for the entire trial, we've calculated the differences between the unmodified network and each network with different parts cut out.
 	return (np.array(trial_results), np.array(orig_actions))

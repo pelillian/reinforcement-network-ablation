@@ -9,4 +9,7 @@
 /images/stl10_input.py
 /images/test_imagenet.py
 /graphs/old
+trial_results.p
+trial_results_imagenet.p
+trial_results_imagenet_64.p
 .DS_Store
