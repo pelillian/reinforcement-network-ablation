@@ -61,6 +61,15 @@ for image_type in IMAGE_TYPES:
 			image_dict[image_type].append(image_filename)
 			num_images += 1
 
+def setup_matplotlib():
+	font = {'family' : 'League Spartan',
+		'weight' : 'bold',
+		'size' : '24'}
+	plt.rc('font', **font)
+	from matplotlib import rcParams
+	rcParams.update({'figure.autolayout': True})
+	plt.tight_layout()
+
 # given a model, actually compute the actions for each image
 def test_network(model, imagefiles_list):
 	action_list = []
@@ -81,7 +90,7 @@ def test_network(model, imagefiles_list):
 				raise ValueError("Net is broken!")
 
 		# Actions:
-		# Forward, Left, Left Rotation
+		# Forward, Left (lateral), Left Rotation
 		# x0.03, x0.03, x90*
 
 		action_list.append(action)
@@ -219,22 +228,22 @@ def test_network_knife(model, network_file_path, imagefiles_list, imagetypes_lis
 	action_max = np.max(np.abs(np.array(all_differences)))
 
 	# visualize the new actions compared to the old
-	with PdfPages(re.sub('\..+', '.pdf', network_file_path)) as pdf:
-		for image_idx, image_filename in enumerate(image_file_list):
+	# with PdfPages(re.sub('\..+', '.pdf', network_file_path)) as pdf:
+	# 	for image_idx, image_filename in enumerate(image_file_list):
 
-			old_action = orig_actions[image_idx]
-			new_actions = new_action_array[image_idx]
+	# 		old_action = orig_actions[image_idx]
+	# 		new_actions = new_action_array[image_idx]
 
-			# calculate the norm between each new action and the old action for coloring
-			differences = [[0, 0, 0]]
-			for new in new_actions:
-				differences.append(new - old_action)
+	# 		# calculate the norm between each new action and the old action for coloring
+	# 		differences = [[0, 0, 0]]
+	# 		for new in new_actions:
+	# 			differences.append(new - old_action)
 
-			actions = np.delete(np.array([old_action] + new_actions), 0, axis=1)
-			differences =  np.delete(np.array(differences), 0, axis=1)
+	# 		actions = np.delete(np.array([old_action] + new_actions), 0, axis=1)
+	# 		differences =  np.delete(np.array(differences), 0, axis=1)
 
-			plot_actions(pdf, actions, action_max, "Image " + str(image_idx + 1) + " (" + imagetypes_list[image_idx] + ")", colors=differences)
-			plot_actions(pdf, differences, action_max, "Image " + str(image_idx + 1), zero_index=False, y_label='Output Change (Action Space)')
+	# 		plot_actions(pdf, actions, action_max, "Image " + str(image_idx + 1) + " (" + imagetypes_list[image_idx] + ")", colors=differences)
+	# 		plot_actions(pdf, differences, action_max, "Image " + str(image_idx + 1), zero_index=False, y_label='Output Change (Action Space)')
 
 	# for the entire trial, we've calculated the differences between the unmodified network and each network with different parts cut out.
 	return (np.array(trial_results), np.array(orig_actions))
@@ -246,11 +255,11 @@ def get_colors(labels):
 	return colors
 
 def get_markers(labels):
-	print(labels)
+	# print(labels)
 	markers = []
 	for i in range(len(labels)):
 		markers.append(MARKERMAP[(int(labels[i]))])
-	print(markers)
+	# print(markers)
 	return markers
 
 def plot_3_2d(x, colors):
@@ -273,30 +282,35 @@ def plot_3_2d(x, colors):
 
 	plt.show()
 
-def save_plot_2d(x, colors, markers, title, cluster_centers=None):
+def save_plot_2d(filename, x, colors, size=100, markers=None, title='', cluster_centers=None, xlabel=None, ylabel=None):
+
+	setup_matplotlib()
 	fig = plt.figure(figsize=(1024/128, 1024/128), dpi=128)
 
 	if len(x[0]) > 2: # use pca to remove extra dims
 		pca = PCA(n_components=2)
 		x = pca.fit_transform(x)
-		use_pca = True
+		xlabel = 'First Principal Component'
+		ylabel = 'Second Principal Component'
 
 	colors = np.array(colors)
 
 	ax = fig.add_subplot(1, 1, 1)
-	# ax.scatter(x[:, 0], x[:, 1], c=colors)
-	for m in np.unique(markers):
-		this_trial = [m == mark for mark in markers]
-		ax.scatter(x[this_trial, 0], x[this_trial, 1], c=colors[this_trial], marker=m, s=100)
-	if use_pca:
-		ax.set_xlabel('First Principal Component')
-		ax.set_ylabel('Second Principal Component')
+	if markers is None:
+		ax.scatter(x[:, 0], x[:, 1], c=colors, s=size)
+	else:
+		for m in np.unique(markers):
+			this_trial = [m == mark for mark in markers]
+			ax.scatter(x[this_trial, 0], x[this_trial, 1], c=colors[this_trial], marker=m, s=size)
+
+	ax.set_xlabel(xlabel)
+	ax.set_ylabel(ylabel)
 	ax.set_title(title)
 
-	xlim = ax.get_xlim()
-	ylim = ax.get_ylim()
-
 	if cluster_centers is not None:
+		xlim = ax.get_xlim()
+		ylim = ax.get_ylim()
+
 		cluster_centers = pca.transform(cluster_centers)
 
 		vor = Voronoi(cluster_centers)
@@ -309,11 +323,11 @@ def save_plot_2d(x, colors, markers, title, cluster_centers=None):
 		plt.xlim(xlim)
 		plt.ylim(ylim)
 
-	plt.savefig('graphs/network_knife_ours.png', dpi=128)
+	plt.savefig(filename, dpi=128)
 
 def plot_3d(x_list, c_list, t_list, use_pca):
 	if len(x_list) != len(c_list) or len(c_list) != len(t_list):
-		print('Length of x, color, and title lists must be the same')
+		print('plot_3d: Length of x, color, and title lists must be the same')
 
 	if len(x_list) > 1:
 		fig = plt.figure(figsize=plt.figaspect(1 / len(x_list)))
@@ -332,13 +346,7 @@ def plot_3d(x_list, c_list, t_list, use_pca):
 	plt.show()
 
 def plot_results(x, cluster_labels, trial_labels, cluster_centers=None, use_pca=True):
-	font = {'family' : 'League Spartan',
-		'weight' : 'bold',
-		'size' : '24'}
-	plt.rc('font', **font)
-	from matplotlib import rcParams
-	rcParams.update({'figure.autolayout': True})
-	plt.tight_layout()
+	setup_matplotlib()
 
 	cluster_colors = get_colors(cluster_labels)
 	trial_colors = get_colors(trial_labels)
@@ -366,13 +374,13 @@ def plot_results(x, cluster_labels, trial_labels, cluster_centers=None, use_pca=
 
 
 	# plot_3d(x_list, c_list, t_list, use_pca)
-	save_plot_2d(x, cluster_colors, trial_markers, '', cluster_centers=cluster_centers)
+	save_plot_2d('graphs/network_knife_ours.png', x, cluster_colors, markers=trial_markers, cluster_centers=cluster_centers)
 
 
 def match_data(trial_results_arr, orig_actions_arr, trials):
-	print(np.array(trial_results_arr).shape)
+	# print(np.array(trial_results_arr).shape)
 	NUM_TRIALS = len(trials)
-	# num_clusters = 6 # 6 almost always gets the highest silhouette score
+	# num_clusters = 6 # value of 6 always gets the highest silhouette score
 
 	trial_labels = np.zeros((NUM_TRIALS, NUM_SLICES))
 	for i in range(NUM_TRIALS):
@@ -384,10 +392,11 @@ def match_data(trial_results_arr, orig_actions_arr, trials):
 
 	for trial_num in range(NUM_TRIALS):
 		trial_results_scaled[trial_labels == trial_num] -= np.mean(trial_results_scaled[trial_labels == trial_num], axis=0)
+		# trial_results_scaled is now centered around the mean
 		trial_results_scaled[trial_labels == trial_num] /= np.max(np.abs(trial_results_scaled[trial_labels == trial_num]), axis=0)
-		# trial_results_scaled[trial_labels == trial_num] = StandardScaler().fit(trial_results_scaled[trial_labels == trial_num]).transform(trial_results_scaled[trial_labels == trial_num])
+		# trial_results_scaled is now between 1 and -1
 	
-	print("silhouette scoring")
+	# print("silhouette scoring")
 	import random
 	clusters_to_check = range(2, 20)
 	sh_scores = []
@@ -400,10 +409,10 @@ def match_data(trial_results_arr, orig_actions_arr, trials):
 			sh_scores[i].append(sh)
 		i += 1
 	sh_scores = np.mean(np.array(sh_scores), axis=0)
-	print(sh_scores)
+	# print(sh_scores)
 	max_score = np.max(sh_scores)
 	num_clusters = clusters_to_check[sh_scores.tolist().index(max_score)]
-	print(max_score, num_clusters)
+	# print(max_score, num_clusters)
 
 
 	kmeans = KMeans(n_clusters=num_clusters, random_state=23588).fit(trial_results_scaled)
@@ -415,7 +424,8 @@ def match_data(trial_results_arr, orig_actions_arr, trials):
 	plot_results(trial_results_scaled, cluster_labels, trial_labels, cluster_centers=cluster_centers, use_pca=True)
 
 	# calculate stats for each cluster
-	print(trial_results_scaled.shape)
+	# print("Scaled:", trial_results_scaled.shape)
+	x = []
 	for i in range(num_clusters):
 		cluster_data = trial_results_scaled[
 			(cluster_labels == i)
@@ -423,11 +433,16 @@ def match_data(trial_results_arr, orig_actions_arr, trials):
 		 ]
 		if len(cluster_data) > 0:
 			avg = np.mean(cluster_data, axis=0).reshape(3, num_images, 2)
-			avg = np.mean(avg, axis=1)
-			print('cluster', i)
-			print(avg)
+			avg = np.mean(avg, axis=(0, 1))
+			x.append(avg)
+			# print('cluster', i)
+			# print(avg)
 		else:
 			print('cluster', i, 'empty')
+	x = np.stack(x)
+	# print(x)
+	save_plot_2d('graphs/network_knife_clusters.png', x, get_colors(range(num_clusters)),
+		size=200, xlabel='Lateral Action', ylabel='Rotational Action')
 
 if __name__ == "__main__":
 
